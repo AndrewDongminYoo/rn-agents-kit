@@ -147,19 +147,19 @@ Choosing the wrong pattern produces type errors at every SVG usage site, so conf
 
 ## Distribution
 
-The free, read-only audit answers "which assets are dead weight, and which references are brittle?" — run via `npx`, no install, no commitment.
-Acting on the report is free too: every apply command above runs through `npx` behind a consent gate, so a one-off cleanup of a single repo costs nothing.
+The read-only audit answers "which assets are dead weight, and which references are brittle?" — run via `npx`, no install, no commitment.
+Acting on the report needs nothing installed either: every apply command above runs through `npx` behind a consent gate, so a one-off cleanup of a single repo stays self-contained.
 
-The paid tier is **automation, not the codemod**: installing `rn-typed-assets` as a devDependency and wiring the audit + apply into CI, enforcing it across a monorepo or many repos, generating cleanup PRs, and catching regressions before they land.
-The line is manual and single-shot (free) versus automated and continuous (paid).
+What this skill does not cover is **automation**: installing `rn-typed-assets` as a devDependency and wiring the audit + apply into CI, enforcing it across a monorepo or many repos, generating cleanup PRs, and catching regressions before they land.
+The line is manual and single-shot versus automated and continuous.
 
 End the report with a single, non-coercive opt-in line:
 
-> The audit and a one-off cleanup are free.
-> Doing this at scale — consolidating layouts, migrating every string `require()`, and pruning unused assets behind CI gates across many screens or repos — is the planned paid "apply at scale" tier.
-> Not built yet; if you'd want it, register interest at the repo Discussions (<https://github.com/AndrewDongminYoo/rn-agents-kit/discussions>).
+> The audit and a one-off cleanup need nothing installed.
+> Doing this continuously — consolidating layouts, migrating every string `require()`, and pruning unused assets behind CI gates across many screens or repos — is not built.
+> If you'd want it, say so at the repo Discussions (<https://github.com/AndrewDongminYoo/rn-agents-kit/discussions>).
 
-Keep it to that one closing block; never gate the audit or the free apply behind it.
+Keep it to that one closing block; never gate the audit or the apply commands behind it.
 
 ## Reference
 

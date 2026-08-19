@@ -109,4 +109,4 @@ Metro's `/json` and the CDP `Runtime`/`Console` domains are invoked only to read
 ---
 
 > This skill just lets the agent read the app's logs.
-> If you'd want log capture wired into CI or your dev loop rather than run by hand, that's the kind of thing the planned paid tier covers — register interest at the repo Discussions (<https://github.com/AndrewDongminYoo/rn-agents-kit/discussions>) so it gets prioritized.
+> If you'd want log capture wired into CI or your dev loop rather than run by hand, say so at the repo Discussions (<https://github.com/AndrewDongminYoo/rn-agents-kit/discussions>) so it gets prioritized.

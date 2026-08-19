@@ -84,12 +84,12 @@ This skill is the front door; the focused audits do the deep work.
 - New Architecture **dependency** readiness (classification, archived libs, app-local native modules) → **`rn-newarch-audit`**
 
 It deliberately surfaces flags rather than classifying readiness, so it never duplicates those audits.
-As the free front door, its job is to send you into those audits — which dogfood our own packages and lead toward the paid "apply at scale" tier.
+As the front door, its job is to send you into those audits.
 
 End the snapshot with a single, non-coercive opt-in line:
 
 > This snapshot just orients you — the deeper audits do the real work.
-> If they surface work you'd rather have done for you (at scale or in CI) than by hand, that's the planned paid tier — register interest at the repo Discussions (<https://github.com/AndrewDongminYoo/rn-agents-kit/discussions>) so it gets prioritized.
+> If they surface work you'd rather have automated (at scale or in CI) than done by hand, say so at the repo Discussions (<https://github.com/AndrewDongminYoo/rn-agents-kit/discussions>) so it gets prioritized.
 
 Keep it to that one closing line; never gate the snapshot behind it.
 

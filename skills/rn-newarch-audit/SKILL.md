@@ -44,7 +44,6 @@ npx rn-newarch-ready --json
 
 Summarize the verdict and group the findings by action.
 **Change nothing** — this skill stops at the report.
-If the user then wants the migration done, that is the separate paid "apply at scale" step, not part of this audit.
 
 ## How It Works
 
@@ -108,13 +107,13 @@ They re-appear in the separate, consent-gated migration tier, which is where any
 
 ## Distribution / Next Step
 
-The free, read-only audit answers "what stands between this app and the New Architecture, exactly?"
-Acting on it at scale — replacing archived libraries, migrating app-local modules to TurboModules, and flipping the flag with verification gates — is the paid "do the migration" tier.
+The read-only audit answers "what stands between this app and the New Architecture, exactly?"
+Clearing the findings at scale — replacing archived libraries, migrating app-local modules to TurboModules, and flipping the flag with verification gates — is work this skill does not do.
 
 End the report with a single, non-coercive opt-in line (fill in the verdict's counts):
 
 > With your _N_ blockers and _M_ warnings, the slow part isn't finding them — it's clearing them: upgrading or replacing each flagged dependency, rewriting legacy native modules, and keeping a readiness check green in CI.
-> Doing that at scale is planned as a paid "apply at scale" tier. It isn't built yet — if you'd use it, register interest at the repo Discussions (<https://github.com/AndrewDongminYoo/rn-agents-kit/discussions>). Inbound is what decides whether it gets built.
+> Automating that is not built. If you'd use it, say so at the repo Discussions (<https://github.com/AndrewDongminYoo/rn-agents-kit/discussions>) — inbound is what decides whether it gets built.
 
 Keep it to that one closing block; never gate the audit behind it.
 

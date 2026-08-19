@@ -1,7 +1,10 @@
 {
   "name": "rn-agents-kit",
   "description": "Audit-first agent skills for React Native maintenance: code-quality audit, New Architecture readiness, asset hygiene, project snapshot, device screen capture, and Metro console capture.",
-  "author": { "name": "Dongmin Yu" },
+  "version": "0.1.0",
+  "author": {
+    "name": "Dongmin Yu"
+  },
   "homepage": "https://github.com/AndrewDongminYoo/rn-agents-kit",
   "skills": "./skills"
 }

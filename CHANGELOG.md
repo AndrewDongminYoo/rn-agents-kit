@@ -1,11 +1,11 @@
 # Changelog
 
 All notable, user-facing changes to this kit are recorded here.
-Entries are grouped by release; the topmost section collects work that has not yet been tagged.
+Entries are grouped by release, newest first.
 
-## [Unreleased]
+## [0.1.0] - 2026-08-19
 
-First public distribution snapshot. Ships six audit-first agent skills for React Native maintenance:
+First tagged release of the public distribution snapshot. Ships six audit-first agent skills for React Native maintenance:
 
 - `rn-project-snapshot` — read-only snapshot of a project's setup that routes you to the deeper audits.
 - `rn-asset-hygiene` — audit and tidy RN assets, then migrate scattered references to a typed registry.

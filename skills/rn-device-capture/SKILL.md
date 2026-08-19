@@ -123,4 +123,4 @@ Invoke each form via `"$SKILL_DIR/device-shot.sh"` (see Quick Steps); the `devic
 ---
 
 > This skill just lets the agent see the screen.
-> If you'd want capture wired into CI or your dev loop rather than run by hand, that's the kind of thing the planned paid tier covers — register interest at the repo Discussions (<https://github.com/AndrewDongminYoo/rn-agents-kit/discussions>) so it gets prioritized.
+> If you'd want capture wired into CI or your dev loop rather than run by hand, say so at the repo Discussions (<https://github.com/AndrewDongminYoo/rn-agents-kit/discussions>) so it gets prioritized.
