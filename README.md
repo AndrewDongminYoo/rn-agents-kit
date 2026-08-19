@@ -21,6 +21,10 @@ Audit-first: every skill inspects and reports before anything changes, and nothi
 | `rn-device-capture`   | Screenshot the running app (Android / iOS simulator / iOS 17+ device) to a fixed path the agent can read — closes the visual feedback loop                                           |
 | `rn-metro-console`    | Read a running app's `console.*` output via Metro's CDP endpoint — bounded by default; the log half of the verification loop                                                         |
 
+## An example run
+
+[New Architecture readiness on a public app](docs/examples/newarch-audit.md) — `rn-newarch-audit` against Rocket.Chat's React Native client: the New Architecture flag is already on, and five of the app's own native modules are still on legacy APIs. 0 files changed, with the commands to reproduce it.
+
 ## How it works
 
 Each skill is **audit-first** and **git-safe**: the first run is read-only and reports findings; any change requires a clean git tree and explicit consent, runs the project's gates afterward, and leaves a reviewable `git diff`.
