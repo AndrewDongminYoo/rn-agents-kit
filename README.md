@@ -1,9 +1,19 @@
 # RN Agents Kit
 
-A curated set of audit-first agent skills for **React Native** that automates the high-friction parts of RN maintenance.
-Audit-first: every skill inspects and reports before anything changes, and nothing changes without your consent.
+[![RN Agents Kit coordinates audit-first React Native maintenance](https://raw.githubusercontent.com/AndrewDongminYoo/rn-agents-kit/main/docs/assets/readme-hero.png)](https://rn-toolkits.donminzzi.kr/rn-agents-kit)
 
-## Install (Claude Code)
+[![license](https://img.shields.io/github/license/AndrewDongminYoo/rn-agents-kit?style=flat-square&color=667085)](LICENSE) [![React Native](https://img.shields.io/badge/React_Native-maintenance-0086aa?style=flat-square&logo=react&logoColor=white)](https://reactnative.dev/) [![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-c57417?style=flat-square)](#install) [![audit first](https://img.shields.io/badge/workflow-audit_first-2f6f44?style=flat-square)](#how-it-works) [![RN Toolkits](https://img.shields.io/badge/docs-RN_Toolkits-c57417?style=flat-square)](https://rn-toolkits.donminzzi.kr/rn-agents-kit)
+
+**Audit React Native projects before an agent changes them.**
+
+[Documentation](https://rn-toolkits.donminzzi.kr/rn-agents-kit) · [Install](#install) · [Issues](https://github.com/AndrewDongminYoo/rn-agents-kit/issues) · [Discussions](https://github.com/AndrewDongminYoo/rn-agents-kit/discussions)
+
+RN Agents Kit is a curated set of agent skills that automates the high-friction parts of React Native maintenance.
+Every skill inspects and reports first, keeps the evidence reproducible, and requires explicit consent before changing a project.
+
+## Install
+
+Add the public marketplace and install the plugin in Claude Code:
 
 ```text
 /plugin marketplace add AndrewDongminYoo/rn-agents-kit
@@ -23,7 +33,8 @@ Audit-first: every skill inspects and reports before anything changes, and nothi
 
 ## An example run
 
-[New Architecture readiness on a public app](docs/examples/newarch-audit.md) — `rn-newarch-audit` against Rocket.Chat's React Native client: the New Architecture flag is already on, and five of the app's own native modules are still on legacy APIs. 0 files changed, with the commands to reproduce it.
+[New Architecture readiness on a public app](docs/examples/newarch-audit.md) shows `rn-newarch-audit` running against Rocket.Chat's React Native client.
+The report records the findings, confirms that 0 files changed, and includes the commands needed to reproduce the audit.
 
 ## How it works
 
