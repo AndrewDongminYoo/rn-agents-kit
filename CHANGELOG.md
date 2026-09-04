@@ -3,7 +3,7 @@
 All notable, user-facing changes to this kit are recorded here.
 Entries are grouped by release, newest first.
 
-## [Unreleased]
+## [0.2.0] - 2026-09-04
 
 - Added `rn-upgrade-pulse`, which records the upgrade surface before a React Native or Expo version bump: installed versions with the manifest that declares them, lockfile and package-manager candidates, native ownership, and CI verification gaps.
 - Added `rn-device-qa`, which routes runtime acceptance evidence to the right surface and names the authorization each one needs.
