@@ -45,9 +45,11 @@ node "$SKILL_DIR/rn-console.mjs" --duration 5          # collect 5s then exit
 node "$SKILL_DIR/rn-console.mjs" --max 30              # stop after 30 logs
 node "$SKILL_DIR/rn-console.mjs" --level error         # errors only
 node "$SKILL_DIR/rn-console.mjs" --filter "Login"      # substring filter
+node "$SKILL_DIR/rn-console.mjs" --device "com.example.app" --preflight  # print the selected target as JSON
 ```
 
 Logs print to stdout; status (target, filters) prints to stderr.
+Preflight prints a selected target descriptor to stdout and does not open a CDP connection.
 For a live human-watched stream, add `--follow` (unbounded, until Ctrl-C) — do not use `--follow` for agent runs, it blocks.
 
 ### 3 — Read and interpret
@@ -67,15 +69,17 @@ Metro (localhost:8081)
 
 ## Commands
 
-| Intent                      | Command                                   | Mutates source? |
-| --------------------------- | ----------------------------------------- | --------------- |
-| Collect ~10s (all levels)   | `rn-console.mjs`                          | no              |
-| Collect for N seconds       | `rn-console.mjs --duration <n>`           | no              |
-| Stop after N logs           | `rn-console.mjs --max <n>`                | no              |
-| Errors only                 | `rn-console.mjs --level error`            | no              |
-| Substring filter            | `rn-console.mjs --filter <text>`          | no              |
-| Pick a target               | `rn-console.mjs --device <name-or-appId>` | no              |
-| Live stream (human, blocks) | `rn-console.mjs --follow`                 | no              |
+| Intent                       | Command                                               | Mutates source? |
+| ---------------------------- | ----------------------------------------------------- | --------------- |
+| Collect ~10s (all levels)    | `rn-console.mjs`                                      | no              |
+| Collect for N seconds        | `rn-console.mjs --duration <n>`                       | no              |
+| Stop after N logs            | `rn-console.mjs --max <n>`                            | no              |
+| Bound discovery before ready | `rn-console.mjs --setup-timeout <n>`                  | no              |
+| Errors only                  | `rn-console.mjs --level error`                        | no              |
+| Substring filter             | `rn-console.mjs --filter <text>`                      | no              |
+| Pick a target                | `rn-console.mjs --device <name-or-appId>`             | no              |
+| Preflight one target         | `rn-console.mjs --device <name-or-appId> --preflight` | no              |
+| Live stream (human, blocks)  | `rn-console.mjs --follow`                             | no              |
 
 Invoke each form via `node "$SKILL_DIR/rn-console.mjs"` (see Quick Steps); the `rn-console.mjs` names above show only the arguments.
 Metro's `/json` and the CDP `Runtime`/`Console` domains are invoked only to read logs; the skill's value is the curated, bounded capture + interpretation, not those endpoints.

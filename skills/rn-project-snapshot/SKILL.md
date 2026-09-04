@@ -1,6 +1,6 @@
 ---
 name: rn-project-snapshot
-description: Use when you want a fast, read-only snapshot of a React Native project's setup — RN/Expo version, New Architecture and Hermes flags, package manager, key config files — before deciding what to audit or upgrade. Read-only; routes to the deeper audits. A read-only reader: it surfaces stable files and commands, never changes anything.
+description: "Use when you want a fast, read-only snapshot of a React Native project's setup — RN/Expo version, New Architecture and Hermes flags, package manager, key config files — before deciding what to audit or upgrade. Read-only; routes to the deeper audits. A read-only reader: it surfaces stable files and commands, never changes anything."
 ---
 
 # RN Project Snapshot — Read-Only Environment & Config Overview

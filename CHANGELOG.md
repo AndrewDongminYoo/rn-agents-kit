@@ -3,6 +3,15 @@
 All notable, user-facing changes to this kit are recorded here.
 Entries are grouped by release, newest first.
 
+## [Unreleased]
+
+- Added `rn-upgrade-pulse`, which records the upgrade surface before a React Native or Expo version bump: installed versions with the manifest that declares them, lockfile and package-manager candidates, native ownership, and CI verification gaps.
+- Added `rn-device-qa`, which routes runtime acceptance evidence to the right surface and names the authorization each one needs.
+- Added `rn-ci-artifact-audit`, a read-only inventory of a GitHub Actions workflow's artifact evidence.
+- Added `rn-eas-profile-audit`, a tested CLI that resolves one EAS build profile and its `extends` chain, plus the skill that interprets it.
+- Made `rn-audit` portable across agent runtimes: its `Workflow`-only script was replaced by a read-only evidence procedure with a sequential fallback.
+- Hardened `rn-metro-console`: an independent setup deadline, readiness gated on the `Runtime.enable` acknowledgement, pre-ready events dropped, and a rejected enable or a pre-ready close reported as a failure.
+
 ## [0.1.0] - 2026-08-19
 
 First tagged release of the public distribution snapshot. Ships six audit-first agent skills for React Native maintenance:

@@ -8,17 +8,23 @@
 //     --level,    -l  log|info|warn|error|all   filter by level (default all)
 //     --filter,   -f  <substring>               case-insensitive message filter
 //     --device,   -d  <substring>               pick target by device name / app id
+//     --preflight                             print one selected React Native target as JSON
 //     --duration, -t  <seconds>                 bounded: stop after N seconds (default 10)
 //     --max,      -m  <count>                    bounded: stop after N matching logs
+//     --setup-timeout <seconds>                  give up before ready after N seconds (default 10)
 //     --follow,   -F                             stream unbounded (until Ctrl-C)
 //     --host,     -H  <host:port>                Metro host (default localhost:8081)
 //     --help,     -h
 //   Run from the project root so a 'ws' fallback resolves from node_modules.
 import { parseArgs } from "node:util";
-import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 const DEFAULT_HOST = "localhost:8081";
 const DEFAULT_DURATION_S = 10;
+// The pre-ready budget is independent of --duration: a short collection window
+// must not cut Metro discovery or the CDP handshake short.
+const DEFAULT_SETUP_TIMEOUT_S = 10;
 const RESET = "\x1b[0m";
 const COLORS = {
   log: "\x1b[37m",
@@ -70,15 +76,38 @@ function matchesDevice(t, device) {
   );
 }
 
-// Prefer the RN app target within the device/appId match; fall back to first.
+// A supplied selector must retain both device/app and React Native identity.
 export function selectTarget(targets, device) {
   if (!Array.isArray(targets) || targets.length === 0) return null;
   const query = String(device ?? "").trim();
   const candidates = query
     ? targets.filter((t) => matchesDevice(t, query))
     : targets;
-  const pool = candidates.length > 0 ? candidates : targets;
-  return pool.find(isReactNativeAppTarget) ?? pool[0];
+  if (query && candidates.length === 0) return null;
+  const appTargets = candidates.filter(isReactNativeAppTarget);
+  if (query) return appTargets.length === 1 ? appTargets[0] : null;
+  return appTargets[0] ?? candidates[0];
+}
+
+// Why did selectTarget return nothing? The three causes need different actions.
+function explainNoTarget(targets, device, host) {
+  const names = (list) =>
+    list.map((t) => t?.title ?? t?.deviceName ?? "[unnamed]").join(", ");
+  if (!Array.isArray(targets) || targets.length === 0) {
+    return `no CDP target at ${host}. Is the app running and connected to Metro?`;
+  }
+  if (!device) {
+    return `no React Native target at ${host}. Seen: ${names(targets)}`;
+  }
+  const matched = targets.filter((t) => matchesDevice(t, device));
+  if (matched.length === 0) {
+    return `no target matches --device "${device}" at ${host}. Seen: ${names(targets)}`;
+  }
+  const appTargets = matched.filter(isReactNativeAppTarget);
+  if (appTargets.length === 0) {
+    return `--device "${device}" matched ${matched.length} target(s), none of them a React Native app target. Matched: ${names(matched)}`;
+  }
+  return `--device "${device}" matched ${appTargets.length} React Native targets; narrow the selector. Matched: ${names(appTargets)}`;
 }
 
 // Should this event be emitted given the level/filter options?
@@ -143,8 +172,10 @@ function printUsage() {
       "  --level,-l    log|info|warn|error|all   (default all)",
       "  --filter,-f   <substring>               case-insensitive message filter",
       "  --device,-d   <substring>               pick target by device name / app id",
+      "  --preflight                             print one selected React Native target as JSON",
       "  --duration,-t <seconds>                 stop after N seconds (default 10)",
       "  --max,-m      <count>                    stop after N matching logs",
+      "  --setup-timeout <seconds>               give up before ready after N seconds (default 10)",
       "  --follow,-F                             stream unbounded (until Ctrl-C)",
       "  --host,-H     <host:port>                Metro host (default localhost:8081)",
       "  --help,-h",
@@ -162,7 +193,9 @@ export async function main(argv = process.argv.slice(2)) {
       level: { type: "string", short: "l" },
       filter: { type: "string", short: "f" },
       device: { type: "string", short: "d" },
+      preflight: { type: "boolean" },
       duration: { type: "string", short: "t" },
+      "setup-timeout": { type: "string" },
       max: { type: "string", short: "m" },
       follow: { type: "boolean", short: "F" },
       host: { type: "string", short: "H" },
@@ -175,6 +208,11 @@ export async function main(argv = process.argv.slice(2)) {
   if (values.help) {
     printUsage();
     return 0;
+  }
+
+  if (values.preflight && !String(values.device ?? "").trim()) {
+    process.stderr.write("[rn-console] --preflight requires --device\n");
+    return 1;
   }
 
   const host = values.host || DEFAULT_HOST;
@@ -193,6 +231,17 @@ export async function main(argv = process.argv.slice(2)) {
     }
     durationMs = d * 1000;
   }
+  const setupRaw = values["setup-timeout"] ?? String(DEFAULT_SETUP_TIMEOUT_S);
+  const setupSeconds = Number(setupRaw);
+  if (!Number.isFinite(setupSeconds) || setupSeconds <= 0) {
+    process.stderr.write(
+      `[rn-console] --setup-timeout must be a positive number (got "${setupRaw}")\n`,
+    );
+    return 1;
+  }
+  const setupTimeoutMs = setupSeconds * 1000;
+  const setupDeadlineMs = Date.now() + setupTimeoutMs;
+  const setupTimeoutMessage = `[rn-console] setup timed out after ${setupTimeoutMs / 1000}s\n`;
   let max = 0;
   if (values.max != null) {
     const m = Number(values.max);
@@ -208,21 +257,39 @@ export async function main(argv = process.argv.slice(2)) {
 
   let targets;
   try {
-    const res = await fetch(`http://${host}/json`);
+    const res = await fetch(`http://${host}/json`, {
+      signal: AbortSignal.timeout(setupTimeoutMs),
+    });
     targets = await res.json();
   } catch (e) {
+    if (e?.name === "TimeoutError") {
+      process.stderr.write(setupTimeoutMessage);
+      return 1;
+    }
     process.stderr.write(
       `[rn-console] cannot reach Metro at ${host} (${e.message}). Is Metro running? (npm start)\n`,
     );
     return 1;
   }
 
-  const target = selectTarget(targets, values.device || "");
+  const requested = values.device || "";
+  const target = selectTarget(targets, requested);
   if (!target || !target.webSocketDebuggerUrl) {
     process.stderr.write(
-      `[rn-console] no CDP target at ${host}. Is the app running and connected to Metro?\n`,
+      `[rn-console] ${explainNoTarget(targets, requested, host)}\n`,
     );
     return 1;
+  }
+
+  if (values.preflight) {
+    process.stdout.write(
+      `${JSON.stringify({
+        title: target.title ?? null,
+        deviceName: target.deviceName ?? null,
+        appId: target.appId ?? null,
+      })}\n`,
+    );
+    return 0;
   }
 
   const WebSocketImpl = await resolveWebSocket();
@@ -236,34 +303,74 @@ export async function main(argv = process.argv.slice(2)) {
   const bound = follow
     ? "(follow)"
     : `duration=${durationMs / 1000}s${max ? ` max=${max}` : ""}`;
-  process.stderr.write(
-    `[rn-console] connected: ${target.title ?? ""} (${target.deviceName ?? ""}) level=${level} filter="${filter || "none"}" ${bound}\n`,
-  );
+  const websocketTimeoutMs = setupDeadlineMs - Date.now();
+  if (websocketTimeoutMs <= 0) {
+    process.stderr.write(setupTimeoutMessage);
+    return 1;
+  }
 
   return await new Promise((resolve) => {
     let count = 0;
     let timer = null;
+    let setupTimer = null;
     let id = 1;
-    const ws = new WebSocketImpl(target.webSocketDebuggerUrl);
+    let settled = false;
+    let ws;
+    const pendingEnables = new Map();
+    // Only Runtime.consoleAPICalled is consumed, so Runtime.enable is what
+    // readiness depends on; Console.enable is sent for targets that want it
+    // but never gates the capture, error or no reply.
+    let requiredEnableId = null;
+    let ready = false;
+    const announceReady = () => {
+      if (settled) return;
+      ready = true;
+      if (setupTimer) {
+        clearTimeout(setupTimer);
+        setupTimer = null;
+      }
+      process.stderr.write(
+        `[rn-console] ready: ${target.title ?? ""} (${target.deviceName ?? ""}) appId=${target.appId ?? "[UNKNOWN]"} level=${level} filter="${filter || "none"}" ${bound}\n`,
+      );
+      if (!follow && durationMs > 0)
+        timer = setTimeout(() => finish(0), durationMs);
+    };
     const finish = (code) => {
+      if (settled) return;
+      settled = true;
       if (timer) clearTimeout(timer);
+      if (setupTimer) clearTimeout(setupTimer);
       try {
-        ws.close();
+        ws?.close();
       } catch {
         /* already closing */
       }
       resolve(code);
     };
+    try {
+      ws = new WebSocketImpl(target.webSocketDebuggerUrl);
+    } catch (e) {
+      process.stderr.write(
+        `[rn-console] websocket error: ${e?.message ?? e}\n`,
+      );
+      finish(1);
+      return;
+    }
+    setupTimer = setTimeout(() => {
+      process.stderr.write(setupTimeoutMessage);
+      finish(1);
+    }, websocketTimeoutMs);
     wire(ws, {
       onOpen: (sock) => {
-        sock.send(
-          JSON.stringify({ id: id++, method: "Runtime.enable", params: {} }),
-        );
-        sock.send(
-          JSON.stringify({ id: id++, method: "Console.enable", params: {} }),
-        );
-        if (!follow && durationMs > 0)
-          timer = setTimeout(() => finish(0), durationMs);
+        if (settled) return;
+        // The setup deadline stays armed until both enables are acknowledged:
+        // a target that accepts the socket but defers CDP commands is not ready.
+        for (const method of ["Runtime.enable", "Console.enable"]) {
+          const commandId = id++;
+          if (method === "Runtime.enable") requiredEnableId = commandId;
+          pendingEnables.set(commandId, method);
+          sock.send(JSON.stringify({ id: commandId, method, params: {} }));
+        }
       },
       onMessage: (text) => {
         let msg;
@@ -272,7 +379,25 @@ export async function main(argv = process.argv.slice(2)) {
         } catch {
           return;
         }
+        if (msg.id != null && pendingEnables.has(msg.id)) {
+          const method = pendingEnables.get(msg.id);
+          const required = msg.id === requiredEnableId;
+          pendingEnables.delete(msg.id);
+          if (msg.error) {
+            const detail = msg.error.message ?? JSON.stringify(msg.error);
+            process.stderr.write(
+              `[rn-console] ${method} failed: ${detail}${required ? "" : " (continuing)"}\n`,
+            );
+            if (required) finish(1);
+            return;
+          }
+          if (required) announceReady();
+          return;
+        }
         if (msg.method !== "Runtime.consoleAPICalled") return;
+        // Events that arrive before readiness predate the collection window;
+        // counting them can end a --max run without ever announcing ready.
+        if (!ready) return;
         const { type: rawType, args, timestamp } = msg.params ?? {};
         const type = normalizeType(rawType);
         const decoded = formatArgs(args);
@@ -283,7 +408,21 @@ export async function main(argv = process.argv.slice(2)) {
         count += 1;
         if (!follow && max > 0 && count >= max) finish(0);
       },
-      onClose: () => finish(0),
+      onClose: () => {
+        // finish() closes the socket, so a failure already reported would
+        // otherwise print a second, unrelated-looking cause here.
+        if (settled) return;
+        // A close before readiness ends no collection window, so it must not
+        // report success.
+        if (!ready) {
+          process.stderr.write(
+            "[rn-console] target closed the connection before setup completed\n",
+          );
+          finish(1);
+          return;
+        }
+        finish(0);
+      },
       onError: (m) => {
         process.stderr.write(`[rn-console] websocket error: ${m}\n`);
         finish(1);
@@ -293,8 +432,19 @@ export async function main(argv = process.argv.slice(2)) {
   });
 }
 
-const invokedDirectly =
-  import.meta.url === pathToFileURL(process.argv[1] ?? "").href;
+// A symlinked skill directory leaves argv[1] on the link while import.meta.url
+// resolves to the real file, so both sides are canonicalized before comparison.
+const invokedDirectly = (() => {
+  try {
+    return (
+      process.argv[1] != null &&
+      realpathSync(process.argv[1]) ===
+        realpathSync(fileURLToPath(import.meta.url))
+    );
+  } catch {
+    return false;
+  }
+})();
 if (invokedDirectly) {
   main()
     .then((code) => process.exit(code))

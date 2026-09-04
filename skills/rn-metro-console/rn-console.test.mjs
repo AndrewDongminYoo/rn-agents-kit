@@ -5,6 +5,8 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
+import { mkdtemp, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -17,6 +19,7 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SCRIPT = join(HERE, "rn-console.mjs");
+const SERVER_SOCKETS = new WeakMap();
 
 test("formatArgs decodes RemoteObject args and strips ANSI", () => {
   assert.equal(
@@ -71,15 +74,48 @@ test("selectTarget scopes app preference to the matching device/appId", () => {
   assert.equal(selectTarget(targets, "com.b"), targets[2]);
 });
 
-test("selectTarget falls back to first when no app target is identifiable", () => {
+test("selectTarget uses a unique device name when app IDs repeat", () => {
+  const targets = [
+    {
+      title: "Hermes React Native",
+      deviceName: "iPhone 15",
+      appId: "com.mock",
+    },
+    {
+      title: "Hermes React Native",
+      deviceName: "iPhone 16 Pro",
+      appId: "com.mock",
+    },
+  ];
+  assert.equal(selectTarget(targets, "iPhone 16 Pro"), targets[1]);
+  assert.equal(selectTarget(targets, "com.mock"), null);
+});
+
+test("selectTarget falls back to first when no selector is supplied", () => {
   const targets = [
     { title: "Unknown runtime", deviceName: "Pixel 7", appId: "com.a" },
     { title: "Other runtime", deviceName: "iPhone 15", appId: "com.b" },
   ];
   assert.equal(selectTarget(targets, ""), targets[0]);
-  assert.equal(selectTarget(targets, "iPhone"), targets[1]);
-  assert.equal(selectTarget(targets, "nope"), targets[0]);
   assert.equal(selectTarget([], "x"), null);
+});
+
+test("selectTarget rejects a selector without a React Native target", () => {
+  const targets = [
+    { title: "Unknown runtime", deviceName: "Pixel 7", appId: "com.a" },
+    { title: "Other runtime", deviceName: "iPhone 15", appId: "com.b" },
+  ];
+  assert.equal(selectTarget(targets, "iPhone"), null);
+  assert.equal(selectTarget(targets, "nope"), null);
+});
+
+test("selectTarget rejects an ambiguous React Native selector", () => {
+  const targets = [
+    { title: "Hermes React Native", deviceName: "iPhone 15", appId: "com.a" },
+    { title: "Hermes React Native", deviceName: "iPhone 15", appId: "com.b" },
+  ];
+  assert.equal(selectTarget(targets, "iPhone"), null);
+  assert.equal(selectTarget(targets, "com.a"), targets[0]);
 });
 
 test("matches applies level, non-empty, and substring filter", () => {
@@ -136,36 +172,90 @@ function consoleFrame(type, text) {
   );
 }
 
-function startMockMetro(frames, targets) {
+function respondWithTargets(req, res, targets) {
+  const targetList =
+    typeof targets === "function"
+      ? targets(req.headers.host)
+      : (targets ?? [
+          {
+            webSocketDebuggerUrl: `ws://${req.headers.host}/inspector`,
+            deviceName: "Mock",
+            appId: "com.mock",
+            title: "Mock App",
+          },
+        ]);
+  res.setHeader("content-type", "application/json");
+  res.end(JSON.stringify(targetList));
+}
+
+function startMockMetro(
+  frames,
+  targets,
+  {
+    stallJson = false,
+    stallUpgrade = false,
+    jsonDelayMs = 0,
+    ackIds = [1, 2],
+    enableErrorId = 0,
+    preReadyFrames = [],
+    closeBeforeAck = false,
+    destroyBeforeAck = false,
+  } = {},
+) {
   const server = http.createServer((req, res) => {
     if (req.url === "/json") {
-      const targetList =
-        typeof targets === "function"
-          ? targets(req.headers.host)
-          : (targets ?? [
-              {
-                webSocketDebuggerUrl: `ws://${req.headers.host}/inspector`,
-                deviceName: "Mock",
-                appId: "com.mock",
-                title: "Mock App",
-              },
-            ]);
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify(targetList));
+      if (stallJson) return;
+      if (jsonDelayMs > 0) {
+        setTimeout(() => respondWithTargets(req, res, targets), jsonDelayMs);
+        return;
+      }
+      respondWithTargets(req, res, targets);
       return;
     }
     res.statusCode = 404;
     res.end();
   });
+  const sockets = new Set();
+  SERVER_SOCKETS.set(server, sockets);
+  server.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.on("close", () => sockets.delete(socket));
+  });
   server.on("upgrade", (req, socket) => {
+    if (stallUpgrade) {
+      socket.on("error", () => {});
+      return;
+    }
     socket.write(
       "HTTP/1.1 101 Switching Protocols\r\n" +
         "Upgrade: websocket\r\nConnection: Upgrade\r\n" +
         `Sec-WebSocket-Accept: ${wsAccept(req.headers["sec-websocket-key"])}\r\n\r\n`,
     );
+    if (destroyBeforeAck) {
+      socket.end();
+      return;
+    }
+    if (closeBeforeAck) {
+      // a clean CDP-side close: FIN + opcode 0x8, empty payload
+      socket.write(Buffer.from([0x88, 0x00]));
+      socket.end();
+      return;
+    }
     socket.once("data", () => {
       // client's Runtime.enable/Console.enable arrived
       socket.on("data", () => {}); // keep draining further client frames
+      for (const f of preReadyFrames) socket.write(f);
+      // the client always sends Runtime.enable as id 1 and Console.enable as id 2
+      for (const commandId of ackIds) {
+        const payload =
+          commandId === enableErrorId
+            ? {
+                id: commandId,
+                error: { code: -32601, message: "enable unsupported" },
+              }
+            : { id: commandId, result: {} };
+        socket.write(encodeTextFrame(JSON.stringify(payload)));
+      }
       const framesForTarget =
         typeof frames === "function" ? frames(req.url) : frames;
       for (const f of framesForTarget) socket.write(f);
@@ -175,17 +265,31 @@ function startMockMetro(frames, targets) {
   return server;
 }
 
-function runScript(args) {
+function runScript(args, timeoutMs = 5000) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [SCRIPT, ...args], {
       stdio: ["ignore", "pipe", "pipe"],
     });
     let out = "";
     let err = "";
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, timeoutMs);
     child.stdout.on("data", (d) => (out += d));
     child.stderr.on("data", (d) => (err += d));
-    child.on("close", (code) => resolve({ code, out, err }));
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      resolve({ code, out, err, timedOut });
+    });
   });
+}
+
+async function closeServer(server) {
+  for (const socket of SERVER_SOCKETS.get(server) ?? []) socket.destroy();
+  server.closeAllConnections?.();
+  await new Promise((resolve) => server.close(resolve));
 }
 
 test("integration: bounded by --max collects N lines then exits 0", async () => {
@@ -210,6 +314,135 @@ test("integration: bounded by --max collects N lines then exits 0", async () => 
     assert.match(lines[1], /\[ERROR\] boom error/);
   } finally {
     server.close();
+  }
+});
+
+test("integration: --preflight reports one selected React Native target", async () => {
+  const server = startMockMetro([], (host) => [
+    {
+      webSocketDebuggerUrl: `ws://${host}/reanimated`,
+      deviceName: "Mock",
+      appId: "com.mock",
+      title: "Reanimated Runtime",
+    },
+    {
+      webSocketDebuggerUrl: `ws://${host}/app`,
+      deviceName: "Mock",
+      appId: "com.mock",
+      title: "Hermes React Native",
+    },
+  ]);
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address();
+  try {
+    const { code, out, err } = await runScript([
+      "--host",
+      `127.0.0.1:${port}`,
+      "--device",
+      "com.mock",
+      "--preflight",
+      "--duration",
+      "0.1",
+    ]);
+    assert.equal(code, 0);
+    assert.equal(err, "");
+    assert.deepEqual(JSON.parse(out), {
+      title: "Hermes React Native",
+      deviceName: "Mock",
+      appId: "com.mock",
+    });
+  } finally {
+    server.close();
+  }
+});
+
+test("integration: --preflight requires a target selector", async () => {
+  const { code, err } = await runScript(["--preflight"]);
+  assert.equal(code, 1);
+  assert.match(err, /--preflight requires --device/);
+});
+
+test("integration: reports ready only after the CDP connection opens", async () => {
+  const server = startMockMetro([]);
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address();
+  try {
+    const { code, err } = await runScript([
+      "--host",
+      `127.0.0.1:${port}`,
+      "--duration",
+      "0.1",
+    ]);
+    assert.equal(code, 0);
+    assert.match(err, /\[rn-console\] ready:/);
+    assert.match(err, /appId=com\.mock/);
+  } finally {
+    server.close();
+  }
+
+  const unavailable = http.createServer();
+  unavailable.on("upgrade", (_req, socket) => socket.destroy());
+  await new Promise((r) => unavailable.listen(0, "127.0.0.1", r));
+  const unavailablePort = unavailable.address().port;
+
+  const failureServer = startMockMetro([], (host) => [
+    {
+      webSocketDebuggerUrl: `ws://127.0.0.1:${unavailablePort}/unavailable`,
+      deviceName: "Mock",
+      appId: "com.mock",
+      title: "Hermes React Native",
+    },
+  ]);
+  await new Promise((r) => failureServer.listen(0, "127.0.0.1", r));
+  const failurePort = failureServer.address().port;
+  try {
+    const { code, err } = await runScript([
+      "--host",
+      `127.0.0.1:${failurePort}`,
+      "--duration",
+      "0.1",
+    ]);
+    assert.equal(code, 1);
+    assert.doesNotMatch(err, /\[rn-console\] ready:/);
+  } finally {
+    await closeServer(failureServer);
+    await closeServer(unavailable);
+  }
+});
+
+test("integration: times out stalled Metro target discovery before ready", async () => {
+  const server = startMockMetro([], undefined, { stallJson: true });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address();
+  try {
+    const { code, err, timedOut } = await runScript(
+      ["--host", `127.0.0.1:${port}`, "--setup-timeout", "0.1"],
+      1500,
+    );
+    assert.equal(timedOut, false);
+    assert.equal(code, 1);
+    assert.match(err, /\[rn-console\] setup timed out/);
+    assert.doesNotMatch(err, /\[rn-console\] ready:/);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("integration: times out a stalled CDP handshake before ready", async () => {
+  const server = startMockMetro([], undefined, { stallUpgrade: true });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address();
+  try {
+    const { code, err, timedOut } = await runScript(
+      ["--host", `127.0.0.1:${port}`, "--setup-timeout", "0.1"],
+      1500,
+    );
+    assert.equal(timedOut, false);
+    assert.equal(code, 1);
+    assert.match(err, /\[rn-console\] setup timed out/);
+    assert.doesNotMatch(err, /\[rn-console\] ready:/);
+  } finally {
+    await closeServer(server);
   }
 });
 
@@ -330,5 +563,255 @@ test('integration: --level warn captures CDP "warning" events', async () => {
     assert.match(lines[0], /\[WARN \] heads up/);
   } finally {
     server.close();
+  }
+});
+
+test("integration: a short --duration still allows slow Metro discovery", async () => {
+  const server = startMockMetro([], undefined, { jsonDelayMs: 150 });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address();
+  try {
+    const { code, err, timedOut } = await runScript(
+      ["--host", `127.0.0.1:${port}`, "--duration", "0.1"],
+      5000,
+    );
+    assert.equal(timedOut, false);
+    assert.equal(code, 0);
+    assert.doesNotMatch(err, /setup timed out/);
+    assert.match(err, /\[rn-console\] ready:/);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("rejects a non-positive --setup-timeout before connecting", async () => {
+  const { code, err } = await runScript(["--setup-timeout", "0"]);
+  assert.equal(code, 1);
+  assert.match(err, /--setup-timeout must be a positive number/);
+});
+
+test("integration: withholds ready until Runtime.enable is acknowledged", async () => {
+  const server = startMockMetro(
+    [consoleFrame("log", "before enable ack")],
+    undefined,
+    { ackIds: [] },
+  );
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address();
+  try {
+    const { code, out, err, timedOut } = await runScript(
+      ["--host", `127.0.0.1:${port}`, "--setup-timeout", "0.5"],
+      3000,
+    );
+    assert.equal(timedOut, false);
+    assert.equal(code, 1);
+    assert.doesNotMatch(err, /\[rn-console\] ready:/);
+    assert.match(err, /setup timed out/);
+    assert.equal(out, "");
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("integration: treats a failed Runtime.enable as a setup failure", async () => {
+  const server = startMockMetro(
+    [consoleFrame("log", "should never print")],
+    undefined,
+    { enableErrorId: 1 },
+  );
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address();
+  try {
+    const { code, out, err, timedOut } = await runScript(
+      ["--host", `127.0.0.1:${port}`, "--setup-timeout", "1"],
+      3000,
+    );
+    assert.equal(timedOut, false);
+    assert.equal(code, 1);
+    assert.match(err, /Runtime\.enable failed: enable unsupported/);
+    assert.doesNotMatch(err, /\[rn-console\] ready:/);
+    assert.equal(out, "");
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("integration: drops console events that arrive before ready", async () => {
+  const server = startMockMetro(
+    [consoleFrame("log", "after ready")],
+    undefined,
+    { preReadyFrames: [consoleFrame("log", "before ready")] },
+  );
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address();
+  try {
+    const { code, out, err, timedOut } = await runScript(
+      ["--host", `127.0.0.1:${port}`, "--max", "1"],
+      5000,
+    );
+    assert.equal(timedOut, false);
+    assert.equal(code, 0);
+    assert.match(err, /\[rn-console\] ready:/);
+    assert.doesNotMatch(out, /before ready/);
+    assert.match(out, /after ready/);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("integration: a close before ready is a setup failure", async () => {
+  const server = startMockMetro([], undefined, { closeBeforeAck: true });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address();
+  try {
+    const { code, out, err, timedOut } = await runScript(
+      ["--host", `127.0.0.1:${port}`, "--setup-timeout", "2"],
+      5000,
+    );
+    assert.equal(timedOut, false);
+    assert.equal(code, 1);
+    assert.match(err, /closed the connection before setup completed/);
+    assert.doesNotMatch(err, /\[rn-console\] ready:/);
+    assert.equal(out, "");
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("runs when invoked through a symlinked skill directory", async () => {
+  const linkDir = await mkdtemp(join(tmpdir(), "rn-console-link-"));
+  const linkPath = join(linkDir, "rn-console.mjs");
+  await symlink(SCRIPT, linkPath);
+  try {
+    const child = spawn(process.execPath, [linkPath, "--help"], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const out = await new Promise((resolve) => {
+      let buffer = "";
+      child.stdout.on("data", (d) => (buffer += d));
+      child.on("close", () => resolve(buffer));
+    });
+    assert.match(out, /collect RN console output via Metro CDP/);
+  } finally {
+    await rm(linkDir, { force: true, recursive: true });
+  }
+});
+
+test("integration: a failed Console.enable does not block the capture", async () => {
+  const server = startMockMetro(
+    [consoleFrame("log", "captured anyway")],
+    undefined,
+    { enableErrorId: 2 },
+  );
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address();
+  try {
+    const { code, out, err, timedOut } = await runScript(
+      ["--host", `127.0.0.1:${port}`, "--max", "1"],
+      5000,
+    );
+    assert.equal(timedOut, false);
+    assert.equal(code, 0);
+    assert.match(
+      err,
+      /Console\.enable failed: enable unsupported \(continuing\)/,
+    );
+    assert.match(err, /\[rn-console\] ready:/);
+    assert.match(out, /captured anyway/);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("integration: an unanswered Console.enable does not block the capture", async () => {
+  const server = startMockMetro(
+    [consoleFrame("log", "captured anyway")],
+    undefined,
+    { ackIds: [1] },
+  );
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address();
+  try {
+    const { code, out, timedOut } = await runScript(
+      ["--host", `127.0.0.1:${port}`, "--max", "1"],
+      5000,
+    );
+    assert.equal(timedOut, false);
+    assert.equal(code, 0);
+    assert.match(out, /captured anyway/);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("integration: names an ambiguous selector instead of blaming Metro", async () => {
+  const twin = (n) => ({
+    webSocketDebuggerUrl: `ws://127.0.0.1:1/inspector${n}`,
+    deviceName: "iPhone",
+    appId: "com.mock",
+    title: `React Native Bridge ${n}`,
+  });
+  const server = startMockMetro([], [twin(1), twin(2)]);
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address();
+  try {
+    const { code, err } = await runScript([
+      "--host",
+      `127.0.0.1:${port}`,
+      "--device",
+      "iPhone",
+    ]);
+    assert.equal(code, 1);
+    assert.match(err, /matched 2 React Native targets; narrow the selector/);
+    assert.doesNotMatch(err, /Is the app running/);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("integration: says the match was not a React Native target", async () => {
+  const server = startMockMetro(
+    [],
+    [
+      {
+        webSocketDebuggerUrl: "ws://127.0.0.1:1/inspector",
+        deviceName: "iPhone",
+        appId: "com.mock",
+        title: "Reanimated Runtime",
+      },
+    ],
+  );
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address();
+  try {
+    const { code, err } = await runScript([
+      "--host",
+      `127.0.0.1:${port}`,
+      "--device",
+      "iPhone",
+    ]);
+    assert.equal(code, 1);
+    assert.match(err, /none of them a React Native app target/);
+    assert.doesNotMatch(err, /Is the app running/);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("integration: an abrupt disconnect reports one cause, not two", async () => {
+  const server = startMockMetro([], undefined, { destroyBeforeAck: true });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address();
+  try {
+    const { code, err, timedOut } = await runScript(
+      ["--host", `127.0.0.1:${port}`, "--setup-timeout", "2"],
+      5000,
+    );
+    assert.equal(timedOut, false);
+    assert.equal(code, 1);
+    assert.match(err, /websocket error/);
+    assert.doesNotMatch(err, /closed the connection before setup completed/);
+  } finally {
+    await closeServer(server);
   }
 });
