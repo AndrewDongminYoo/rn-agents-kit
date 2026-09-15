@@ -15,7 +15,7 @@
 //     --follow,   -F                             stream unbounded (until Ctrl-C)
 //     --host,     -H  <host:port>                Metro host (default localhost:8081)
 //     --help,     -h
-//   Run from the project root so a 'ws' fallback resolves from node_modules.
+//   Run from the project root so 'ws' resolves from node_modules when present.
 import { parseArgs } from "node:util";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -131,14 +131,18 @@ export function formatLine(type, text, timestamp, useColor) {
   return `${COLORS[type] ?? COLORS.log}${line}${RESET}`;
 }
 
-// Prefer the built-in WebSocket (Node >= 22); else the project's ws; else null.
+// Prefer the project's `ws` because Metro can require an Origin header.
+// The Node >= 22 built-in remains a fallback for servers that accept its
+// headerless handshake.
 async function resolveWebSocket() {
-  if (typeof globalThis.WebSocket === "function") return globalThis.WebSocket;
   try {
     const { createRequire } = await import("node:module");
     const require = createRequire(`${process.cwd()}/package.json`);
-    return require("ws");
+    return { WebSocketImpl: require("ws"), supportsOrigin: true };
   } catch {
+    if (typeof globalThis.WebSocket === "function") {
+      return { WebSocketImpl: globalThis.WebSocket, supportsOrigin: false };
+    }
     return null;
   }
 }
@@ -180,7 +184,7 @@ function printUsage() {
       "  --host,-H     <host:port>                Metro host (default localhost:8081)",
       "  --help,-h",
       "",
-      'Run from the project root so a "ws" fallback resolves from node_modules.',
+      'Run from the project root so "ws" resolves from node_modules when present.',
       "",
     ].join("\n"),
   );
@@ -292,13 +296,20 @@ export async function main(argv = process.argv.slice(2)) {
     return 0;
   }
 
-  const WebSocketImpl = await resolveWebSocket();
-  if (!WebSocketImpl) {
+  const transport = await resolveWebSocket();
+  if (!transport) {
     process.stderr.write(
       '[rn-console] no WebSocket available: use Node >= 22 (built-in) or install "ws" in your project.\n',
     );
     return 1;
   }
+  const { WebSocketImpl, supportsOrigin } = transport;
+  const metroOrigin = new URL(`http://${host}`).origin;
+  const describeWebSocketFailure = (detail) => {
+    const cause = String(detail ?? "").trim() || "connection failed";
+    if (supportsOrigin) return cause;
+    return `${cause}. The built-in WebSocket cannot send Metro's required Origin; if Metro rejected the handshake, make "ws" resolvable from the project root.`;
+  };
 
   const bound = follow
     ? "(follow)"
@@ -348,10 +359,14 @@ export async function main(argv = process.argv.slice(2)) {
       resolve(code);
     };
     try {
-      ws = new WebSocketImpl(target.webSocketDebuggerUrl);
+      ws = supportsOrigin
+        ? new WebSocketImpl(target.webSocketDebuggerUrl, {
+            origin: metroOrigin,
+          })
+        : new WebSocketImpl(target.webSocketDebuggerUrl);
     } catch (e) {
       process.stderr.write(
-        `[rn-console] websocket error: ${e?.message ?? e}\n`,
+        `[rn-console] websocket error: ${describeWebSocketFailure(e?.message ?? e)}\n`,
       );
       finish(1);
       return;
@@ -416,7 +431,7 @@ export async function main(argv = process.argv.slice(2)) {
         // report success.
         if (!ready) {
           process.stderr.write(
-            "[rn-console] target closed the connection before setup completed\n",
+            `[rn-console] ${describeWebSocketFailure("target closed the connection before setup completed")}\n`,
           );
           finish(1);
           return;
@@ -424,7 +439,9 @@ export async function main(argv = process.argv.slice(2)) {
         finish(0);
       },
       onError: (m) => {
-        process.stderr.write(`[rn-console] websocket error: ${m}\n`);
+        process.stderr.write(
+          `[rn-console] websocket error: ${describeWebSocketFailure(m)}\n`,
+        );
         finish(1);
       },
     });

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -200,6 +200,7 @@ function startMockMetro(
     preReadyFrames = [],
     closeBeforeAck = false,
     destroyBeforeAck = false,
+    requiredOrigin = "",
   } = {},
 ) {
   const server = http.createServer((req, res) => {
@@ -222,6 +223,10 @@ function startMockMetro(
     socket.on("close", () => sockets.delete(socket));
   });
   server.on("upgrade", (req, socket) => {
+    if (requiredOrigin && req.headers.origin !== requiredOrigin) {
+      socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+      return;
+    }
     if (stallUpgrade) {
       socket.on("error", () => {});
       return;
@@ -265,9 +270,11 @@ function startMockMetro(
   return server;
 }
 
-function runScript(args, timeoutMs = 5000) {
+function runScript(args, timeoutMs = 5000, { cwd, env } = {}) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [SCRIPT, ...args], {
+      cwd,
+      env: { ...process.env, ...env },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let out = "";
@@ -285,6 +292,85 @@ function runScript(args, timeoutMs = 5000) {
     });
   });
 }
+
+test("integration: project ws receives the Metro origin", async () => {
+  const projectDir = await mkdtemp(join(tmpdir(), "rn-console-ws-"));
+  const wsDir = join(projectDir, "node_modules", "ws");
+  await mkdir(wsDir, { recursive: true });
+  await writeFile(join(projectDir, "package.json"), '{"private":true}\n');
+  await writeFile(
+    join(wsDir, "index.js"),
+    `const { EventEmitter } = require("node:events");
+module.exports = class TestWebSocket extends EventEmitter {
+  constructor(_url, options) {
+    super();
+    if (options?.origin !== process.env.EXPECTED_ORIGIN) {
+      throw new Error(\`expected origin \${process.env.EXPECTED_ORIGIN}, got \${options?.origin}\`);
+    }
+    process.nextTick(() => this.emit("open"));
+  }
+  send(data) {
+    const message = JSON.parse(data);
+    process.nextTick(() => {
+      this.emit("message", JSON.stringify({ id: message.id, result: {} }));
+      if (message.id === 1) {
+        this.emit("message", JSON.stringify({
+          method: "Runtime.consoleAPICalled",
+          params: {
+            type: "log",
+            args: [{ type: "string", value: "origin accepted" }],
+            timestamp: 1700000000000,
+          },
+        }));
+      }
+    });
+  }
+  close() {}
+};
+`,
+  );
+
+  const server = startMockMetro([], undefined, {
+    requiredOrigin: "http://invalid-without-ws.example",
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  const expectedOrigin = `http://127.0.0.1:${port}`;
+  try {
+    const { code, out, err, timedOut } = await runScript(
+      ["--host", `127.0.0.1:${port}`, "--max", "1"],
+      5000,
+      { cwd: projectDir, env: { EXPECTED_ORIGIN: expectedOrigin } },
+    );
+    assert.equal(timedOut, false);
+    assert.equal(code, 0);
+    assert.match(err, /\[rn-console\] ready:/);
+    assert.match(out, /origin accepted/);
+  } finally {
+    await closeServer(server);
+    await rm(projectDir, { force: true, recursive: true });
+  }
+});
+
+test("integration: built-in handshake failure names the Origin limitation", async () => {
+  const requiredOrigin = "http://metro.example";
+  const server = startMockMetro([], undefined, { requiredOrigin });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const { code, err, timedOut } = await runScript(
+      ["--host", `127.0.0.1:${port}`, "--setup-timeout", "1"],
+      3000,
+    );
+    assert.equal(timedOut, false);
+    assert.equal(code, 1);
+    assert.match(err, /websocket error: connection failed/);
+    assert.match(err, /built-in WebSocket cannot send Metro's required Origin/);
+    assert.match(err, /make "ws" resolvable from the project root/);
+  } finally {
+    await closeServer(server);
+  }
+});
 
 async function closeServer(server) {
   for (const socket of SERVER_SOCKETS.get(server) ?? []) socket.destroy();

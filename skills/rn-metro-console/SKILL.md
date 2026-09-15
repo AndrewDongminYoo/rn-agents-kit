@@ -20,8 +20,9 @@ It is read-only with respect to your source — it writes nothing, only prints.
 
 ## Prerequisites / Setup
 
-- Metro running (`npm start` / `npx react-native start`) on `localhost:8081`, with the app open on a simulator/device so a CDP target exists.
-- Node ≥ 22 (built-in `WebSocket`). On older Node, install `ws` in the project; run the helper from the project root so `ws` resolves.
+- Metro running (`npm start` / `npx react-native start`) on `localhost:8081`, with the app open and attached to Metro so a CDP target exists.
+- Run the helper from the project root so it can prefer the project's `ws` package and send Metro's required `Origin` header.
+- Node ≥ 22 provides a built-in fallback when `ws` is unavailable, but that fallback cannot send `Origin` and may be rejected by a physical-device inspector target.
 
 ## Quick Steps (read-only on source)
 
@@ -37,7 +38,7 @@ SKILL_DIR="<this skill's base directory>"   # the absolute path provided when th
 
 ### 2 — Capture (bounded)
 
-Run from the user's project root (so a `ws` fallback resolves), invoking the helper by its installed path:
+Run from the user's project root so `ws` resolves when the project provides it, invoking the helper by its installed path:
 
 ```bash
 node "$SKILL_DIR/rn-console.mjs"                       # collect ~10s, all levels
@@ -46,6 +47,7 @@ node "$SKILL_DIR/rn-console.mjs" --max 30              # stop after 30 logs
 node "$SKILL_DIR/rn-console.mjs" --level error         # errors only
 node "$SKILL_DIR/rn-console.mjs" --filter "Login"      # substring filter
 node "$SKILL_DIR/rn-console.mjs" --device "com.example.app" --preflight  # print the selected target as JSON
+node "$SKILL_DIR/rn-console.mjs" --device "iPhone 16 Pro" --preflight     # disambiguate devices that share an app ID
 ```
 
 Logs print to stdout; status (target, filters) prints to stderr.
@@ -101,7 +103,9 @@ Metro's `/json` and the CDP `Runtime`/`Console` domains are invoked only to read
 | ------------------------------------------------ | --------------------------------------------------------------------------------------- |
 | Using `--follow` in an agent run                 | It streams forever and blocks — use the bounded default (`--duration`/`--max`)          |
 | Metro not running                                | `npm start` first — `localhost:8081` must be open                                       |
-| `/json` returns an empty list                    | The app is not running or not connected to this Metro instance                          |
+| `/json` returns an empty list                    | Open the app and confirm that it is attached to this Metro instance                     |
+| Physical-device handshake fails without Origin   | Run from the project root and make the project's `ws` package resolvable                |
+| One app ID appears on multiple devices           | Select the target by its unique `deviceName`, such as `--device "iPhone 16 Pro"`        |
 | Empty capture read as "no bug"                   | The app may be idle or need a reload — trigger the path and recapture                   |
 | Calling `skills/rn-metro-console/rn-console.mjs` | That repo-relative path does not exist after install; use `"$SKILL_DIR/rn-console.mjs"` |
 

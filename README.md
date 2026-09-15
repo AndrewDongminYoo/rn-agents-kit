@@ -22,18 +22,18 @@ Add the public marketplace and install the plugin in Claude Code:
 
 ## Skills
 
-| Skill                  | What it does                                                                                                                                                        |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rn-project-snapshot`  | Read-only snapshot of a project's setup — version, New Architecture / Hermes flags, configs — then routes you to the deeper audits                                  |
-| `rn-asset-hygiene`     | Audit and tidy RN assets — find unused images / SVG / Lottie, consolidate scattered `require()` paths, migrate to a typed registry                                  |
-| `rn-newarch-audit`     | Audit New Architecture readiness — classify dependencies, flag archived libraries, find app-local native modules on legacy APIs                                     |
-| `rn-audit`             | Evidence-based code audit — rendering, hooks correctness, list virtualization, native boundaries, effects; every finding is challenged before it reaches the report |
-| `rn-device-capture`    | Screenshot the running app (Android / iOS simulator / iOS 17+ device) to a reported path under `logs/` the agent can read — closes the visual feedback loop         |
-| `rn-metro-console`     | Read a running app's `console.*` output via Metro's CDP endpoint — bounded by default; the log half of the verification loop                                        |
-| `rn-device-qa`         | Route runtime acceptance evidence — screenshots, Metro logs, interactive QA — to the right surface, and name the authorization each one needs                       |
-| `rn-ci-artifact-audit` | Read-only inventory of where a GitHub Actions workflow declares its artifact evidence — app roots, dependency and build declarations, artifact references           |
-| `rn-eas-profile-audit` | Resolve one EAS build profile and its `extends` chain from `eas.json`, rejecting missing profiles, cycles and excessive depth                                       |
-| `rn-upgrade-pulse`     | Record the upgrade surface before a React Native or Expo version bump — installed versions, lockfile candidates, native ownership, CI verification gaps             |
+| Skill                  | What it does                                                                                                                                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rn-project-snapshot`  | Read-only snapshot of a project's setup — version, New Architecture / Hermes flags, configs — then routes you to the deeper audits                                                                                        |
+| `rn-asset-hygiene`     | Audit and tidy RN assets — find unused images / SVG / Lottie, consolidate scattered `require()` paths, migrate to a typed registry                                                                                        |
+| `rn-newarch-audit`     | Audit New Architecture readiness — classify dependencies, flag archived libraries, find app-local native modules on legacy APIs                                                                                           |
+| `rn-audit`             | Evidence-based code audit — rendering, hooks correctness, list virtualization, native boundaries, effects; challenges every finding independently when available, otherwise reports a sequential challenge as `[PARTIAL]` |
+| `rn-device-capture`    | Screenshot the running app (Android / iOS simulator / iOS 17+ device) to a reported path under `logs/` the agent can read — closes the visual feedback loop                                                               |
+| `rn-metro-console`     | Read a running app's `console.*` output via Metro's CDP endpoint — bounded by default; the log half of the verification loop                                                                                              |
+| `rn-device-qa`         | Route runtime acceptance evidence — screenshots, Metro logs, interactive QA — to the right surface, and name the authorization each one needs                                                                             |
+| `rn-ci-artifact-audit` | Read-only inventory of where a GitHub Actions workflow declares its artifact evidence — app roots, dependency and build declarations, artifact references                                                                 |
+| `rn-eas-profile-audit` | Resolve one EAS build profile and its `extends` chain from `eas.json`, rejecting missing profiles, cycles and excessive depth                                                                                             |
+| `rn-upgrade-pulse`     | Record the upgrade surface before a React Native or Expo version bump — installed versions, lockfile candidates, native ownership, CI verification gaps                                                                   |
 
 ## An example run
 
