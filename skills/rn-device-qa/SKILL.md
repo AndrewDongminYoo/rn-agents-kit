@@ -56,7 +56,7 @@ It does not operate a device, install tools, launch apps, or change external sta
      Confirm that `[rn-console] ready` identifies the recorded device and app identifier before reading the output.
    - Start `node "$METRO_SKILL_DIR/rn-console.mjs" --host "$METRO_HOST" --device "$METRO_SELECTOR"` in a background session with a bounded duration.
    - Wait for its `[rn-console] ready` status.
-   - Have an authorized device operator trigger the path while the collector is active.
+   - Have an authorized device user trigger the path while the collector is active.
    - Wait for the collector to return before reading its output.
 6. Record the starting state, observed result, evidence path, build-attribution status, and untested criteria.
 
@@ -107,7 +107,7 @@ Do not report command round-trip time or placeholder values as startup, frame, F
 | Putting device operation in this reader             | Report the required authorization and handoff instead.                                                 |
 | Letting automatic target discovery choose a device  | Run Metro preflight with the recorded unique selector and verify the returned app identifier.          |
 | Calling bare `rn-console.mjs`                       | Set `METRO_SKILL_DIR` and invoke `node "$METRO_SKILL_DIR/rn-console.mjs"`.                             |
-| Reading an empty log window as proof of no defect   | Start the collector, wait for `[rn-console] ready`, then have an authorized operator trigger the path. |
+| Reading an empty log window as proof of no defect   | Start the collector, wait for `[rn-console] ready`, then have an authorized user trigger the path.     |
 | Attributing evidence to an unverified build         | Record the fingerprint source or report build attribution as `[UNCERTAIN]`.                            |
 | Pairing a screenshot and a log by device name alone | A Metro descriptor carries no serial or UDID: map it to the recorded identity or report `[UNCERTAIN]`. |
 | Reporting an issue quota                            | Report the actual coverage and findings, including zero findings.                                      |
