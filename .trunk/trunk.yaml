@@ -2,7 +2,7 @@
 # To learn more about the format of this file, see https://docs.trunk.io/reference/trunk-yaml
 version: 0.1
 cli:
-  version: 1.25.0
+  version: 1.29.0
 plugins:
   sources:
     - id: trunk
@@ -16,19 +16,23 @@ runtimes:
     - python@3.14.4
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 lint:
+  definitions:
+    - name: pinact
+      commands:
+        - name: upgrade
+          enabled: true
   enabled:
-    - actionlint@1.7.8
-    - checkov@3.3.30
+    - actionlint@1.7.12
+    - checkov@3.4.3
     - git-diff-check
     - markdownlint@0.50.0
-    - oxipng@9.1.5
-    - pinact@4.1.1!:
-        commands: [lint, upgrade]
+    - oxipng@10.2.1
+    - pinact@4.1.1!
     - prettier@3.9.10
     - shellcheck@0.11.0
-    - shfmt@3.13.1
-    - trivy@0.70.0
-    - trufflehog@3.90.13
+    - shfmt@3.14.1
+    - trivy@0.76.2
+    - trufflehog@3.99.8
     - yamllint@1.38.0
 actions:
   disabled:
