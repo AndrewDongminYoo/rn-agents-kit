@@ -3,6 +3,11 @@
 All notable, user-facing changes to this kit are recorded here.
 Entries are grouped by release, newest first.
 
+## [0.2.2] - 2026-11-22
+
+- Upgraded the TOML and YAML parsers that `rn-upgrade-pulse` bundles to `smol-toml@1.9.1` and `yaml@2.9.1`. The TOML upgrade fixes GHSA-r4xh-jqrq-34v2, a parse time that grew quadratically with the number of keys. A `mise.toml` that opens with a byte-order mark is still refused, as before.
+- Added a plugin icon.
+
 ## [0.2.1] - 2026-09-15
 
 - Updated `rn-metro-console` to prefer a project-resolvable `ws` transport and send Metro's required `Origin` header for physical-device inspector handshakes.
