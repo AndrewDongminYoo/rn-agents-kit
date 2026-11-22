@@ -31,7 +31,7 @@ The install takes about 15 seconds and the audit runs in seconds; it needs `node
 
 ![Running the New Architecture readiness audit on Rocket.Chat's React Native client](./newarch-audit.gif)
 
-The recording is the run below, unedited ([asciicast](./newarch-audit.cast)).
+The recording is the run below, unedited.
 
 ```log
 React Native — New Architecture readiness
