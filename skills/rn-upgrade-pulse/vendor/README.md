@@ -3,8 +3,11 @@
 This skill is installed by cloning the plugin, and nothing runs `npm install` afterwards.
 A dependency therefore arrives in the tree or it does not arrive at all.
 
-Each directory below holds one published package, copied unmodified from its npm tarball.
-Nothing here is written or edited by this repository: a change to a vendored file is an upgrade, performed by replacing the directory with a newer tarball's files and updating its row.
+Each directory below holds one published package, copied from its npm tarball.
+The code files are unmodified.
+The one exception is `package.json`: it keeps only the fields that the Claude plugin directory accepts (`name`, `version`, `description`, `keywords`, `homepage`, `bugs`, `license`, `author`, `contributors`, `maintainers`, `funding`, `repository`, `private`, `type`, `files`, `engines`), because the directory refuses other fields such as `bin`, `main`, `exports`, and `scripts`.
+The reduction keeps `type`, which is the field this copy needs, and nothing here loads a package through `main` or `exports`.
+Apart from that reduction, nothing here is written or edited by this repository: a change to a vendored file is an upgrade, performed by replacing the directory with a newer tarball's files and updating its row.
 `.trunk/trunk.yaml` keeps the formatter off these paths for the same reason, so a copy stays byte-identical to what was published.
 
 | Directory    | Package                   | License      | Copied                                      | Tarball integrity                                                                                  |
@@ -49,6 +52,12 @@ dest=skills/rn-upgrade-pulse/vendor/js-yaml
 mkdir -p "$dest/dist"
 cp "$TMPDIR/package/dist/js-yaml.mjs" "$dest/dist/"
 cp "$TMPDIR/package/package.json" "$TMPDIR/package/LICENSE" "$dest/"
+```
+
+After either copy, reduce every copied `package.json` to the accepted fields:
+
+```bash
+node -e 'const fs=require("fs");const keep=new Set(["$schema","name","displayName","version","description","keywords","homepage","bugs","license","author","contributors","maintainers","funding","repository","private","type","files","engines"]);for(const f of process.argv.slice(1)){const j=JSON.parse(fs.readFileSync(f,"utf8"));fs.writeFileSync(f,JSON.stringify(Object.fromEntries(Object.entries(j).filter(([k])=>keep.has(k))),null,2)+"\n")}' skills/rn-upgrade-pulse/vendor/*/package.json
 ```
 
 `npm pack` verifies what it downloads against the registry's own integrity for that exact version, and the row records that value, so a tarball that no longer matches is visible here rather than only in a fetch that fails.
