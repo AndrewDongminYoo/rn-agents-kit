@@ -1055,9 +1055,9 @@ test("a mise config that declares the pin twice does not resolve", async () => {
 // A TOML parser's message quotes the line it failed on, so a file it refuses is
 // reported by code and the error object is never read. A duplicate key is the
 // format's own refusal and arrives the same way. The byte-order mark is here
-// because the parser rejects one and this reader passes that on: whether mise
-// itself would read the file is not established, and the refusal is the
-// direction to be wrong in.
+// because this reader refuses one before parsing, which the parser no longer
+// does: whether mise itself would read the file is not established, and the
+// refusal is the direction to be wrong in.
 test("a mise config the parser refuses is reported by code alone", async () => {
   for (const contents of [
     '[tools]\nnode = "20.11.1"\nnode = "18.19.0"\n',

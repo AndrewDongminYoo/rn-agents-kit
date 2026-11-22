@@ -253,15 +253,15 @@ const MISE_TOOL_NAMES = ["node", "nodejs", "core:node"];
 // collapsing a present `tools` into an absent one, the other only landing on the
 // right answer because a date has no `version` property. Both parsers return a
 // plain object for a mapping, inline or not, so the prototype separates it from
-// anything else that is an object. Naming `TomlDate` would cover the one value
-// type that happens to be an object today rather than the class, which is why
-// the YAML reader takes this same test rather than one of its own.
+// anything else that is an object. The YAML parser gives a mapping
+// `Object.prototype`, and smol-toml 1.9 gives it a null prototype, so both are
+// accepted. Naming `TomlDate` would cover the one value type that happens to be
+// an object today rather than the class, which is why the YAML reader takes this
+// same test rather than one of its own.
 function isTable(value) {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    Object.getPrototypeOf(value) === Object.prototype
-  );
+  if (value === null || typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 // One entry, as mise spells a version: the string itself, or the `version` key
@@ -287,6 +287,12 @@ function miseVersions(declaration) {
 }
 
 function readMiseConfig(text) {
+  // smol-toml 1.9 skips a leading byte-order mark, and earlier releases refused
+  // it. Whether mise itself reads such a file is not established, so this reader
+  // keeps the refusal instead of taking the parser's answer.
+  if (text.charCodeAt(0) === 0xfeff) {
+    throw new Error("mise config opens with a byte-order mark");
+  }
   const tools = parseToml(text).tools;
   if (tools === undefined) return { reason: "NO_EVIDENCE" };
   // present and not a table, so this file says something about tools that this

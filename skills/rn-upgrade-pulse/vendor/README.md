@@ -13,8 +13,8 @@ Do not run a formatter on these paths for the same reason, so the code files sta
 | Directory    | Package                   | License      | Copied                                      | Tarball integrity                                                                                  |
 | ------------ | ------------------------- | ------------ | ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | `js-yaml/`   | `@zkochan/js-yaml@0.0.11` | MIT          | `dist/js-yaml.mjs`, `package.json`, `LICENSE` | `sha512-SO+h5Jg079r2JvGle0jbdtk1EY7ppu6TGzmfWTp3Gy61IEb1OVKBocJ6ydTn4++nYFNfRKYenI2MniZQwsM9KQ==` |
-| `smol-toml/` | `smol-toml@1.8.0`         | BSD-3-Clause | `dist/*.js`, `package.json`, `LICENSE`      | `sha512-kCZr2V3ch9i00x8zXRhjUNVcjG9ijES5dDudkXvUVCT5QlJNQWElSJdZqyPemffHoLNUYwOcou0Fy+ojN0uHSQ==` |
-| `yaml/`      | `yaml@2.9.0`              | ISC          | `dist/**/*.js`, `package.json`, `LICENSE`   | `sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==` |
+| `smol-toml/` | `smol-toml@1.9.1`         | BSD-3-Clause | `dist/*.js`, `package.json`, `LICENSE`      | `sha512-j7WyPdf0CJoutMzMoPLF/bVXHtKZIT9Rb4eGeEbWw8X2t5oirjPgpL+OpaENZrILYaXqYwnVH+qgUwVbl+pUJQ==` |
+| `yaml/`      | `yaml@2.9.1`              | ISC          | `dist/**/*.js`, `package.json`, `LICENSE`   | `sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw==` |
 
 The copy rule for `smol-toml` and `yaml` is a rule rather than a file list: every `.js` file under the tarball's `dist`, at the path the tarball puts it at, plus `package.json` and `LICENSE`.
 That takes the package's own entry and every module it loads, and leaves out the type declarations, a build outside `dist` such as `yaml`'s browser bundle, and anything under `dist` that is not `.js` — `smol-toml`'s CommonJS bundle and `yaml`'s CLI entry are both dropped that way, and neither is loaded from here.
