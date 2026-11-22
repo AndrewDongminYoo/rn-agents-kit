@@ -8,7 +8,7 @@ The code files are unmodified.
 The one exception is `package.json`: it keeps only the fields that the Claude plugin directory accepts (`name`, `version`, `description`, `keywords`, `homepage`, `bugs`, `license`, `author`, `contributors`, `maintainers`, `funding`, `repository`, `private`, `type`, `files`, `engines`), because the directory refuses other fields such as `bin`, `main`, `exports`, and `scripts`.
 The reduction keeps `type`, which is the field this copy needs, and nothing here loads a package through `main` or `exports`.
 Apart from that reduction, nothing here is written or edited by this repository: a change to a vendored file is an upgrade, performed by replacing the directory with a newer tarball's files and updating its row.
-`.trunk/trunk.yaml` keeps the formatter off these paths for the same reason, so a copy stays byte-identical to what was published.
+Do not run a formatter on these paths for the same reason, so the code files stay byte-identical to what was published.
 
 | Directory    | Package                   | License      | Copied                                      | Tarball integrity                                                                                  |
 | ------------ | ------------------------- | ------------ | ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
